@@ -27,14 +27,17 @@ export default defineCommand({
     moduleName: {
       type: 'positional',
       description: 'Module name',
+      alias: 'm',
     },
     skipInstall: {
       type: 'boolean',
       description: 'Skip npm install',
+      default: true,
     },
     skipConfig: {
       type: 'boolean',
       description: 'Skip nuxt.config.ts update',
+      default: true,
     },
     peerDeps: {
       type: 'string',
@@ -49,7 +52,7 @@ export default defineCommand({
       description:
         'Use this with "-p" option.\n\t \
            Enabling this option will install to devDependencies.',
-      alias: 'D',
+      alias: ['D'],
       default: false,
     },
   },
@@ -71,14 +74,48 @@ export default defineCommand({
       }
     }
 
-    if (typeof ctx.args.moduleName === 'object') {
-      consola.box(`${consola.warn('多分エラー出るよ:', ctx.args.moduleName)}`)
-    }
+    const addModules = ctx.args.moduleName.split(',')
+    consola.warn('多分エラー出るよ:', addModules)
+    // for (const m of addModules) {
+    //   const r = await resolveModule(m, cwd)
+    //   if (r === false) {
+    //     return
+    //   }
+    //   const isDev = Boolean(projectPkg.devDependencies?.nuxt)
+    //   consola.info(
+    //     `Installing \`${r.pkg}\`${isDev ? ' development' : ''} dependency`,
+    //   )
 
-    const r = await resolveModule(ctx.args.moduleName, cwd)
-    if (r === false) {
-      return
-    }
+    //   await addDependency(m, {
+    //     cwd,
+    //     dev: isDev,
+    //   }).catch((error) => {
+    //     consola.error(error)
+    //   })
+    // }
+    addModules.map(async (module) => {
+      const r = await resolveModule(module, cwd)
+      if (r === false) {
+        return
+      }
+      const isDev = Boolean(projectPkg.devDependencies?.nuxt)
+      consola.info(
+        `Installing \`${r.pkg}\`${isDev ? ' development' : ''} dependency`,
+      )
+
+      await addDependency(module, {
+        cwd,
+        dev: isDev,
+      }).catch((error) => {
+        consola.error(error)
+      })
+    })
+
+    // const r = await resolveModule(ctx.args.moduleName, cwd)
+    // if (r === false) {
+    //   return
+    // }
+    const r = false
 
     // Add npm dependency
     if (!ctx.args.skipInstall) {
