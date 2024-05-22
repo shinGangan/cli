@@ -36,9 +36,25 @@ export default defineCommand({
       type: 'boolean',
       description: 'Skip nuxt.config.ts update',
     },
+    peerDeps: {
+      type: 'string',
+      description:
+        'Installing peer dependencies.\n\t \
+           If not specified, peerDependencies from package.json will be installed.',
+      alias: 'p',
+      default: undefined,
+    },
+    devDeps: {
+      type: 'boolean',
+      description:
+        'Use this with "-p" option.\n\t \
+           Enabling this option will install to devDependencies.',
+      alias: 'D',
+      default: false,
+    },
   },
   async setup(ctx) {
-    const cwd = resolve(ctx.args.cwd || '.')
+    const cwd = resolve(ctx.args.cwd || './playground')
     const projectPkg = await getProjectPackage(cwd)
 
     if (!projectPkg.dependencies?.nuxt && !projectPkg.devDependencies?.nuxt) {
@@ -53,6 +69,10 @@ export default defineCommand({
       if (shouldContinue !== true) {
         return false
       }
+    }
+
+    if (typeof ctx.args.moduleName === 'object') {
+      consola.box(`${consola.warn('多分エラー出るよ:', ctx.args.moduleName)}`)
     }
 
     const r = await resolveModule(ctx.args.moduleName, cwd)
@@ -107,6 +127,23 @@ export default defineCommand({
         )
       })
     }
+
+    // Install peer dependencies
+    const _deps = ctx.args.peerDeps
+    if (typeof _deps === 'undefined') {
+      consola.info('peer dependencies is not installed')
+      // Note: if r.nuxtModule.peerDependencies is not empty, install them
+      // } else if (deps.length === 0) {
+      //   consola.start('Installing peer dependencies from package.json')
+      //   consola.box(`${typeof deps}\n\n${deps}`)
+    } else {
+      consola.info(`Installing ${colors.cyan(_deps)} dependencies`)
+      await addDependency(_deps, { cwd, dev: ctx.args.devDeps }).catch(
+        (error) => {
+          consola.error(error)
+        },
+      )
+    }
   },
 })
 
@@ -121,8 +158,7 @@ async function updateNuxtConfig(
   if (existsSync(nuxtConfigFile)) {
     consola.info('Updating `nuxt.config.ts`')
     _module = await loadFile(nuxtConfigFile)
-  }
-  else {
+  } else {
     consola.info('Creating `nuxt.config.ts`')
     _module = parseModule(getDefaultNuxtConfig())
   }
@@ -132,8 +168,7 @@ async function updateNuxtConfig(
   }
   if (defaultExport.$type === 'function-call') {
     update(defaultExport.$args[0])
-  }
-  else {
+  } else {
     update(defaultExport)
   }
   await writeFile(_module as any, nuxtConfigFile)
@@ -149,8 +184,8 @@ export default defineNuxtConfig({
 }
 
 // Based on https://github.com/dword-design/package-name-regex
-const packageRegex
-  = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?([a-z0-9-~][a-z0-9-._~]*)(@[^@]+)?$/
+const packageRegex =
+  /^(@[a-z0-9-~][a-z0-9-._~]*\/)?([a-z0-9-~][a-z0-9-._~]*)(@[^@]+)?$/
 
 async function resolveModule(
   moduleName: string,
@@ -158,11 +193,11 @@ async function resolveModule(
 ): Promise<
   | false
   | {
-    nuxtModule?: NuxtModule
-    pkg: string
-    pkgName: string
-    pkgVersion: string
-  }
+      nuxtModule?: NuxtModule
+      pkg: string
+      pkgName: string
+      pkgVersion: string
+    }
 > {
   let pkgName = moduleName
   let pkgVersion: string | undefined
@@ -173,8 +208,7 @@ async function resolveModule(
       pkgName = `${reMatch[1] || ''}${reMatch[2] || ''}`
       pkgVersion = reMatch[3].slice(1)
     }
-  }
-  else {
+  } else {
     consola.error(`Invalid package name \`${pkgName}\`.`)
     return false
   }
@@ -185,10 +219,10 @@ async function resolveModule(
   })
 
   const matchedModule = modulesDB.find(
-    module =>
-      module.name === moduleName
-      || module.npm === pkgName
-      || module.aliases?.includes(pkgName),
+    (module) =>
+      module.name === moduleName ||
+      module.npm === pkgName ||
+      module.aliases?.includes(pkgName),
   )
 
   if (matchedModule?.npm) {
@@ -223,8 +257,7 @@ async function resolveModule(
         if (satisfies(nuxtVersion, _nuxtVersion)) {
           if (!pkgVersion) {
             pkgVersion = _moduleVersion
-          }
-          else {
+          } else {
             consola.warn(
               `Recommended version of \`${pkgName}\` for Nuxt \`${nuxtVersion}\` is \`${_moduleVersion}\` but you have requested \`${pkgVersion}\``,
             )
@@ -249,9 +282,9 @@ async function resolveModule(
     pkg.devDependencies || {},
   )
   if (
-    !pkgDependencies['nuxt']
-    && !pkgDependencies['nuxt-edge']
-    && !pkgDependencies['@nuxt/kit']
+    !pkgDependencies['nuxt'] &&
+    !pkgDependencies['nuxt-edge'] &&
+    !pkgDependencies['@nuxt/kit']
   ) {
     consola.warn(`It seems that \`${pkgName}\` is not a Nuxt module.`)
     const shouldContinue = await consola.prompt(
@@ -272,4 +305,20 @@ async function resolveModule(
     pkgName,
     pkgVersion,
   }
+}
+
+if (import.meta.vitest) {
+  const { describe, it, expect } = import.meta.vitest
+  describe('add', () => {
+    it('should add a module', async () => {
+      const ctx = {
+        args: {
+          moduleName: 'nuxt-content',
+          skipInstall: true,
+          skipConfig: true,
+        },
+      }
+      await resolveModule(ctx.args.moduleName, './playground')
+    })
+  })
 }
